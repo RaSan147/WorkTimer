@@ -263,7 +263,8 @@
     let totalSeconds = studyMinutesInput.value * 60;
     let isStudyTime = true;
     let isPaused = true;
-    const DEFAULT_VOLUME = 1.0; // Set a default volume
+    const DEFAULT_VOLUME = 1.0; // Set a default HTMLAudio volume (max 1.0)
+    const AUDIO_BOOST = 4.0; // Multiply WebAudio output by this to make it louder (can be >1)
 
     // --- DARK MODE LOGIC ---
     const htmlEl = document.documentElement;
@@ -289,16 +290,17 @@
     let audioContext;
 
     // --- CUSTOM TRANSITION SOUNDS (provided by user) ---
-    const WORK_START_URL = 'https://soundbuttonsworld.com/uploads/80692be5-6357-40d3-b608-0674f3e49d24.mp3'; // play when starting study (end of rest)
-    const REST_START_URL = 'https://soundbuttonsworld.com/uploads/2785624a-47cf-4a42-a7ee-08f8fce880c3.mp3'; // play when starting rest
-
-    //const WORK_START_URL = 'https://soundbuttonsworld.com/api/upload/download?id=80692be5-6357-40d3-b608-0674f3e49d24.mp3'; // play when starting rest
-    //const REST_START_URL = 'https://soundbuttonsworld.com/api/upload/download?id=2785624a-47cf-4a42-a7ee-08f8fce880c3.mp3'; // play when starting study (end of rest)
+    const WORK_START_URL = 'https://cdn.jsdelivr.net/gh/RaSan147/WorkTimer@27c21bb21fc01b9d6ec40d91ed24f9c2f00dac30/back2desk.mp3'; // play when starting study (end of rest)
+    const REST_START_URL = 'https://cdn.jsdelivr.net/gh/RaSan147/WorkTimer@27c21bb21fc01b9d6ec40d91ed24f9c2f00dac30/getRest.mp3'; // play when starting rest
 
     // HTMLAudio elements for playback (avoid CORS issues with WebAudio fetch/decode)
     let studyStartAudioEl = null;
     let restStartAudioEl = null;
     let htmlAudioUnlocked = false;
+    // WebAudio routing
+    let htmlGainNode = null; // gain node used to boost HTMLAudio and synth output
+    let studyStartSource = null;
+    let restStartSource = null;
 
     // (Removed legacy sample preload)
 
@@ -307,12 +309,35 @@
         if (!studyStartAudioEl) {
             studyStartAudioEl = new Audio(WORK_START_URL);
             studyStartAudioEl.preload = 'auto';
+            studyStartAudioEl.crossOrigin = 'anonymous';
             studyStartAudioEl.volume = DEFAULT_VOLUME;
         }
         if (!restStartAudioEl) {
             restStartAudioEl = new Audio(REST_START_URL);
             restStartAudioEl.preload = 'auto';
+            restStartAudioEl.crossOrigin = 'anonymous';
             restStartAudioEl.volume = DEFAULT_VOLUME;
+        }
+        // If an AudioContext exists, create a gain node to boost output and route HTMLAudio through it.
+        if (audioContext) {
+            if (!htmlGainNode) {
+                htmlGainNode = audioContext.createGain();
+                htmlGainNode.gain.value = AUDIO_BOOST; // can be >1 to amplify
+                htmlGainNode.connect(audioContext.destination);
+            }
+            try {
+                if (studyStartAudioEl && !studyStartSource) {
+                    studyStartSource = audioContext.createMediaElementSource(studyStartAudioEl);
+                    studyStartSource.connect(htmlGainNode);
+                }
+                if (restStartAudioEl && !restStartSource) {
+                    restStartSource = audioContext.createMediaElementSource(restStartAudioEl);
+                    restStartSource.connect(htmlGainNode);
+                }
+            } catch (e) {
+                // createMediaElementSource may throw if elements were already used or due to CORS; ignore and fall back to element volume
+                console.warn('Could not route HTMLAudio through AudioContext:', e);
+            }
         }
     }
 
@@ -354,8 +379,14 @@
         // Master gain with a softer attack
         const master = audioContext.createGain();
         master.gain.setValueAtTime(0, t0);
-        master.gain.linearRampToValueAtTime(volume * 0.5, t0 + 0.05); // Slower, softer attack
-        master.connect(audioContext.destination);
+        // scale by DEFAULT_VOLUME to preserve intended relative loudness
+        master.gain.linearRampToValueAtTime((DEFAULT_VOLUME || 1) * 0.5, t0 + 0.05); // Slower, softer attack
+        // connect to boost node if present so both HTMLAudio and synth share same amplification
+        if (htmlGainNode) {
+            master.connect(htmlGainNode);
+        } else {
+            master.connect(audioContext.destination);
+        }
 
         // Define the frequencies for a more consonant, bell-like chord (e.g., G Major)
         const fundamental = 440; // A4
