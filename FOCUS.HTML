@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus Timer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f0f0f5;
+            --container-bg: rgba(255, 255, 255, 0.6);
+            --text-color: #1d1d1f;
+            --primary-color: #007aff;
+            --secondary-color: #e5e5ea;
+            --secondary-text: #6e6e73;
+            --shadow-color: rgba(0, 0, 0, 0.08);
+            --border-color: rgba(0, 0, 0, 0.1);
+            --transition-speed: 0.4s;
+        }
+
+        body.dark-mode {
+            --bg-color: #1d1d1f;
+            --container-bg: rgba(44, 44, 46, 0.7);
+            --text-color: #f5f5f7;
+            --primary-color: #0a84ff;
+            --secondary-color: #3a3a3c;
+            --secondary-text: #8e8e93;
+            --shadow-color: rgba(0, 0, 0, 0.25);
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        html, body {
+            width: 100%;
+            min-height: 100vh;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            transition: background-color var(--transition-speed) ease, color var(--transition-speed) ease;
+            color-scheme: light dark;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            box-sizing: border-box;
+            width: min(500px, 92%);
+            padding: 2rem;
+            background: var(--container-bg);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-radius: 24px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 12px 40px -12px var(--shadow-color);
+            transition: background-color var(--transition-speed) ease, border-color var(--transition-speed) ease;
+        }
+
+        .header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        #status {
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin: 0;
+            color: var(--text-color);
+            transition: color var(--transition-speed) ease;
+        }
+
+        #darkModeToggle {
+            background: transparent;
+            border: none;
+            color: var(--secondary-text);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: color 0.2s, background-color 0.2s;
+        }
+        #darkModeToggle:hover {
+            color: var(--text-color);
+            background-color: var(--secondary-color);
+        }
+        .dark-mode #darkModeToggle .sun-icon { display: block; }
+        .dark-mode #darkModeToggle .moon-icon { display: none; }
+        #darkModeToggle .sun-icon { display: none; }
+
+        #timer {
+            font-size: clamp(4rem, 15vw, 7rem);
+            font-weight: 700;
+            line-height: 1;
+            margin: 0;
+            color: var(--text-color);
+            transition: color var(--transition-speed) ease;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            width: 100%;
+        }
+
+        .controls button {
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            background-color: var(--primary-color);
+            border: none;
+            border-radius: 12px;
+            padding: 0.8rem 0;
+            flex: 1;
+            max-width: 150px;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.2s ease, background-color var(--transition-speed) ease;
+        }
+
+        .controls button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 122, 255, 0.2);
+        }
+        
+        .controls button#pause, .controls button#reset {
+            background-color: var(--secondary-color);
+            color: var(--secondary-text);
+        }
+        
+        .controls button#pause:hover, .controls button#reset:hover {
+             box-shadow: 0 6px 12px var(--shadow-color);
+        }
+
+        .settings {
+            width: 100%;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1.5rem;
+            margin-top: 0.5rem;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(140px, 1fr));
+            gap: 1.5rem 1rem;
+            transition: border-color var(--transition-speed) ease;
+        }
+
+        .setting-group {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .input-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .settings label {
+            font-weight: 500;
+            color: var(--secondary-text);
+            transition: color var(--transition-speed) ease;
+        }
+
+        .settings input[type="number"] {
+            width: 4rem;
+            font-size: 1rem;
+            font-weight: 500;
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            background-color: transparent;
+            color: var(--text-color);
+            border-radius: 8px;
+            text-align: center;
+            transition: background-color var(--transition-speed) ease, color var(--transition-speed) ease, border-color var(--transition-speed) ease;
+        }
+        .settings input[type="number"]:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+        }
+
+        /* (Phase chip removed) */
+
+        @media (max-width: 480px) {
+            .container {
+                gap: 1rem;
+                padding: 1.5rem;
+                border-radius: 20px;
+            }
+            #status { font-size: 1.5rem; }
+            .settings { grid-template-columns: 1fr; }
+            .setting-group { width: 100%; align-items: center; }
+            .input-row { width: 100%; justify-content: space-between; max-width: 260px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1 id="status">Study Session</h1>
+        <button id="darkModeToggle" aria-label="Toggle Dark Mode">
+            <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+                <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM12 15c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+            </svg>
+            <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+                <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.64-.11 2.4-.31-.3-.28-.57-.6-.8-.95-.83-1.27-1.2-2.77-1.2-4.34 0-3.73 2.93-6.8 6.6-7.02.33-.01.65.01.98.05C19.1 5.64 15.88 3 12 3zm-1.29 12.27c.01.01 0 0 0 0z"/>
+            </svg>
+        </button>
+    </div>
+
+    <div id="timer">45:00</div>
+
+    <div class="controls">
+        <button id="start">Start</button>
+        <button id="pause">Pause</button>
+        <button id="reset">Reset</button>
+    </div>
+
+    <div class="settings">
+        <div class="setting-group">
+            <div class="input-row">
+                <label for="study-minutes">Study</label>
+                <input type="number" id="study-minutes" value="45" min="1">
+                <span>min</span>
+            </div>
+        </div>
+        <div class="setting-group">
+            <div class="input-row">
+                <label for="break-minutes">Break</label>
+                <input type="number" id="break-minutes" value="15" min="1">
+                <span>min</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- SCRIPT START ---
+    const body = document.body;
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    const statusDisplay = document.getElementById('status');
+    const timerDisplay = document.getElementById('timer');
+    const startBtn = document.getElementById('start');
+    const pauseBtn = document.getElementById('pause');
+    const resetBtn = document.getElementById('reset');
+    const studyMinutesInput = document.getElementById('study-minutes');
+    const breakMinutesInput = document.getElementById('break-minutes');
+
+    let timerInterval = null;
+    let totalSeconds = studyMinutesInput.value * 60;
+    let isStudyTime = true;
+    let isPaused = true;
+    const DEFAULT_VOLUME = 1.0; // Set a default volume
+
+    // --- DARK MODE LOGIC ---
+    const htmlEl = document.documentElement;
+    function applyDarkModeClass(shouldAdd) {
+        body.classList.toggle('dark-mode', shouldAdd);
+        htmlEl.classList.toggle('dark-mode', shouldAdd);
+    }
+
+    const savedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    // Use saved theme, or fallback to system preference
+    const isDark = savedTheme ? savedTheme === 'dark' : prefersDark;
+    applyDarkModeClass(isDark);
+
+    darkModeToggle.addEventListener('click', () => {
+        const willBeDark = !body.classList.contains('dark-mode');
+        applyDarkModeClass(willBeDark);
+        localStorage.setItem('theme', willBeDark ? 'dark' : 'light');
+    });
+
+
+    // --- AUDIO DING ---
+    let audioContext;
+
+    // --- CUSTOM TRANSITION SOUNDS (provided by user) ---
+    const WORK_START_URL = 'https://soundbuttonsworld.com/uploads/80692be5-6357-40d3-b608-0674f3e49d24.mp3'; // play when starting study (end of rest)
+    const REST_START_URL = 'https://soundbuttonsworld.com/uploads/2785624a-47cf-4a42-a7ee-08f8fce880c3.mp3'; // play when starting rest
+
+    //const WORK_START_URL = 'https://soundbuttonsworld.com/api/upload/download?id=80692be5-6357-40d3-b608-0674f3e49d24.mp3'; // play when starting rest
+    //const REST_START_URL = 'https://soundbuttonsworld.com/api/upload/download?id=2785624a-47cf-4a42-a7ee-08f8fce880c3.mp3'; // play when starting study (end of rest)
+
+    // HTMLAudio elements for playback (avoid CORS issues with WebAudio fetch/decode)
+    let studyStartAudioEl = null;
+    let restStartAudioEl = null;
+    let htmlAudioUnlocked = false;
+
+    // (Removed legacy sample preload)
+
+    // Prepare HTMLAudio elements and attempt to unlock them on first user gesture
+    function ensureHtmlAudioElements() {
+        if (!studyStartAudioEl) {
+            studyStartAudioEl = new Audio(WORK_START_URL);
+            studyStartAudioEl.preload = 'auto';
+            studyStartAudioEl.volume = DEFAULT_VOLUME;
+        }
+        if (!restStartAudioEl) {
+            restStartAudioEl = new Audio(REST_START_URL);
+            restStartAudioEl.preload = 'auto';
+            restStartAudioEl.volume = DEFAULT_VOLUME;
+        }
+    }
+
+    function attemptUnlockHtmlAudio() {
+        if (htmlAudioUnlocked) return;
+        ensureHtmlAudioElements();
+        const tryUnlock = (el) => {
+            if (!el) return Promise.resolve();
+            const prevVol = el.volume;
+            el.volume = 0; // avoid audible blip
+            // play-pause cycle within user gesture to unlock
+            return el.play().then(() => {
+                el.pause();
+                el.currentTime = 0;
+                el.volume = prevVol;
+            }).catch(() => {
+                // ignore; some browsers may still allow later plays after user gesture
+                el.volume = prevVol;
+            });
+        };
+        Promise.all([tryUnlock(studyStartAudioEl), tryUnlock(restStartAudioEl)]).finally(() => {
+            htmlAudioUnlocked = true;
+        });
+    }
+
+    // (Removed legacy sample playback)
+
+    // (Removed WebAudio buffer playback)
+    function playDing() {
+        // More pleasing chime with multiple, harmonically-related sine waves
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioContext.state === 'suspended') audioContext.resume();
+
+        const t0 = audioContext.currentTime;
+        const volume = DEFAULT_VOLUME;
+
+        // Master gain with a softer attack
+        const master = audioContext.createGain();
+        master.gain.setValueAtTime(0, t0);
+        master.gain.linearRampToValueAtTime(volume * 0.5, t0 + 0.05); // Slower, softer attack
+        master.connect(audioContext.destination);
+
+        // Define the frequencies for a more consonant, bell-like chord (e.g., G Major)
+        const fundamental = 440; // A4
+        const partials = [
+            fundamental * 0.5, // G3
+            fundamental,       // G4
+            fundamental * 1.5, // D5
+            fundamental * 2,   // G5
+            fundamental * 2.5  // B5
+        ];
+        const partialGains = [0.6, 1, 0.7, 0.4, 0.3]; // Give fundamental most presence
+
+        partials.forEach((freq, i) => {
+            const osc = audioContext.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            // Slight detuning for richness
+            osc.detune.value = i > 0 ? (Math.random() - 0.5) * 8 : 0;
+
+            const env = audioContext.createGain();
+            const attackTime = 0.015;
+            const decayTime = 1.8 + (Math.random() * 0.4); // Vary decay slightly
+
+            env.gain.setValueAtTime(0, t0);
+            env.gain.linearRampToValueAtTime(partialGains[i], t0 + attackTime);
+            env.gain.exponentialRampToValueAtTime(0.0001, t0 + decayTime);
+
+            osc.connect(env);
+            env.connect(master);
+
+            osc.start(t0);
+            osc.stop(t0 + decayTime + 0.1);
+        });
+
+        // Smooth fade out for the master gain
+        master.gain.setTargetAtTime(0.00001, t0 + 1.5, 0.5);
+    }
+
+    // (Removed legacy generic notification chooser)
+
+    // Play transition sound using HTMLAudio first; fallback to synth if it fails
+    async function playTransitionSound(nextIsStudyPhase) {
+        try {
+            ensureHtmlAudioElements();
+            const el = nextIsStudyPhase ? studyStartAudioEl : restStartAudioEl;
+            // Reset to start if previously played
+            el.currentTime = 0;
+            await el.play();
+            return;
+        } catch (e2) {
+            console.warn('HTMLAudio transition sound failed, falling back to synth ding', e2);
+        }
+        // Last resort
+        playDing();
+    }
+
+    function updateDisplay() {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        timerDisplay.textContent = formattedTime;
+        document.title = `${formattedTime} - ${isStudyTime ? 'Study' : 'Break'}`;
+    }
+
+    function updatePhaseUI() {
+        statusDisplay.textContent = isStudyTime ? 'Study Session' : 'Take a Break';
+    }
+
+    function startTimer() {
+        if (isPaused) {
+            isPaused = false;
+            if (!timerInterval) {
+                 totalSeconds = (isStudyTime ? studyMinutesInput.value : breakMinutesInput.value) * 60;
+            }
+            
+            timerInterval = setInterval(() => {
+                if (totalSeconds > 0) {
+                    totalSeconds--;
+                    updateDisplay();
+                } else {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                    const nextIsStudy = !isStudyTime;
+                    // Play user-provided sound for the upcoming phase
+                    playTransitionSound(nextIsStudy);
+                    isStudyTime = nextIsStudy;
+                    updatePhaseUI();
+                    totalSeconds = (isStudyTime ? studyMinutesInput.value : breakMinutesInput.value) * 60;
+                    updateDisplay();
+                    isPaused = true; 
+                }
+            }, 1000);
+        }
+    }
+
+    function pauseTimer() {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        isPaused = true;
+    }
+
+    function resetTimer() {
+        pauseTimer();
+        isStudyTime = true;
+        totalSeconds = studyMinutesInput.value * 60;
+        updatePhaseUI();
+        updateDisplay();
+    }
+
+    startBtn.addEventListener('click', () => {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // resume audio context on user gesture and start preloading sample
+        if (audioContext.state === 'suspended') audioContext.resume();
+        // Prepare and unlock HTMLAudio
+        ensureHtmlAudioElements();
+        attemptUnlockHtmlAudio();
+        startTimer();
+    });
+    pauseBtn.addEventListener('click', pauseTimer);
+    resetBtn.addEventListener('click', resetTimer);
+
+    studyMinutesInput.addEventListener('change', () => {
+        if (isPaused && isStudyTime) {
+            resetTimer();
+        }
+    });
+
+    breakMinutesInput.addEventListener('change', () => {
+        if (isPaused && !isStudyTime) {
+            totalSeconds = breakMinutesInput.value * 60;
+            updateDisplay();
+        }
+    });
+
+    // Initialize display on load
+    updatePhaseUI();
+    updateDisplay();
+</script>
+
+</body>
+</html>
