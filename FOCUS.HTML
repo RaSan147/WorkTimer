@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Focus Timer</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg-color: #f0f0f5;
@@ -15,7 +12,10 @@
             --primary-color: #007aff;
             --secondary-color: #e5e5ea;
             --secondary-text: #6e6e73;
+            --danger-color: #ff3b30;
             --shadow-color: rgba(0, 0, 0, 0.08);
+            --primary-hover-shadow: rgba(0, 122, 255, 0.2);
+            --danger-hover-shadow: rgba(255, 59, 48, 0.2);
             --border-color: rgba(0, 0, 0, 0.1);
             --transition-speed: 0.4s;
         }
@@ -27,7 +27,10 @@
             --primary-color: #0a84ff;
             --secondary-color: #3a3a3c;
             --secondary-text: #8e8e93;
+            --danger-color: #ff453a;
             --shadow-color: rgba(0, 0, 0, 0.25);
+            --primary-hover-shadow: rgba(0, 122, 255, 0.2);
+            --danger-hover-shadow: rgba(255, 69, 58, 0.25);
             --border-color: rgba(255, 255, 255, 0.1);
         }
 
@@ -124,26 +127,54 @@
             border: none;
             border-radius: 12px;
             padding: 0.8rem 0;
-            flex: 1;
-            max-width: 150px;
+            flex-grow: 1;
+            flex-basis: 0;
             cursor: pointer;
-            transition: transform 0.15s ease, box-shadow 0.2s ease, background-color var(--transition-speed) ease;
+            transition: transform 0.15s ease, box-shadow 0.2s ease, background-color var(--transition-speed) ease, color var(--transition-speed) ease, opacity 0.2s ease;
         }
 
-        .controls button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0, 122, 255, 0.2);
+        /* 'Start' / 'Resume' button state */
+        .controls button.primary {
+            background-color: var(--primary-color);
+            color: white;
         }
-        
-        .controls button#pause, .controls button#reset {
+        .controls button.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px var(--primary-hover-shadow);
+        }
+
+        /* 'Reset' button state */
+        .controls button.secondary {
             background-color: var(--secondary-color);
             color: var(--secondary-text);
         }
+        .controls button.secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px var(--shadow-color);
+        }
         
-        .controls button#pause:hover, .controls button#reset:hover {
-             box-shadow: 0 6px 12px var(--shadow-color);
+        /* 'Pause' button state */
+        .controls button.danger {
+            background-color: var(--danger-color);
+            color: white;
+        }
+        .controls button.danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px var(--danger-hover-shadow);
         }
 
+        /* Disabled state for buttons */
+        .controls button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+         .controls button:disabled:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        
         .settings {
             width: 100%;
             border-top: 1px solid var(--border-color);
@@ -191,8 +222,6 @@
             box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
         }
 
-        /* (Phase chip removed) */
-
         @media (max-width: 480px) {
             .container {
                 gap: 1rem;
@@ -224,23 +253,22 @@
     <div id="timer">45:00</div>
 
     <div class="controls">
-        <button id="start">Start</button>
-        <button id="pause">Pause</button>
-        <button id="reset">Reset</button>
+        <button id="resetBtn" class="secondary" disabled>Reset</button>
+        <button id="startPauseBtn" class="primary">Start</button>
     </div>
 
     <div class="settings">
         <div class="setting-group">
             <div class="input-row">
                 <label for="study-minutes">Study</label>
-                <input type="number" id="study-minutes" value="45" min="1">
+                <input type="number" id="study-minutes" value="45" min="0" step="any">
                 <span>min</span>
             </div>
         </div>
         <div class="setting-group">
             <div class="input-row">
                 <label for="break-minutes">Break</label>
-                <input type="number" id="break-minutes" value="15" min="1">
+                <input type="number" id="break-minutes" value="15" min="0" step="any">
                 <span>min</span>
             </div>
         </div>
@@ -253,18 +281,23 @@
     const darkModeToggle = document.getElementById('darkModeToggle');
     const statusDisplay = document.getElementById('status');
     const timerDisplay = document.getElementById('timer');
-    const startBtn = document.getElementById('start');
-    const pauseBtn = document.getElementById('pause');
-    const resetBtn = document.getElementById('reset');
+    
+    const startPauseBtn = document.getElementById('startPauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
     const studyMinutesInput = document.getElementById('study-minutes');
     const breakMinutesInput = document.getElementById('break-minutes');
 
     let timerInterval = null;
+    // totalSeconds always represents the currently-displayed remaining whole seconds
     let totalSeconds = studyMinutesInput.value * 60;
+    // endTimestamp is the target time (ms since epoch) when the running timer will hit zero
+    let endTimestamp = null;
+    const TICK_INTERVAL_MS = 500; // UI refresh interval (keeps updates responsive without being wasteful)
     let isStudyTime = true;
     let isPaused = true;
-    const DEFAULT_VOLUME = 1.0; // Set a default HTMLAudio volume (max 1.0)
-    const AUDIO_BOOST = 4.0; // Multiply WebAudio output by this to make it louder (can be >1)
+    const DEFAULT_VOLUME = 1.0;
+    const AUDIO_BOOST = 4.0; 
 
     // --- DARK MODE LOGIC ---
     const htmlEl = document.documentElement;
@@ -275,7 +308,6 @@
 
     const savedTheme = localStorage.getItem('theme');
     const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    // Use saved theme, or fallback to system preference
     const isDark = savedTheme ? savedTheme === 'dark' : prefersDark;
     applyDarkModeClass(isDark);
 
@@ -289,72 +321,70 @@
     // --- AUDIO DING ---
     let audioContext;
 
-    // --- CUSTOM TRANSITION SOUNDS (provided by user) ---
-    const WORK_START_URL = 'https://cdn.jsdelivr.net/gh/RaSan147/WorkTimer@27c21bb21fc01b9d6ec40d91ed24f9c2f00dac30/back2desk.mp3'; // play when starting study (end of rest)
-    const REST_START_URL = 'https://cdn.jsdelivr.net/gh/RaSan147/WorkTimer@27c21bb21fc01b9d6ec40d91ed24f9c2f00dac30/getRest.mp3'; // play when starting rest
+    const WORK_START_URL = 'https://cdn.jsdelivr.net/gh/RaSan147/WorkTimer@27c21bb21fc01b9d6ec40d91ed24f9c2f00dac30/back2desk.mp3';
+    const REST_START_URL = 'https://cdn.jsdelivr.net/gh/RaSan147/WorkTimer@27c21bb21fc01b9d6ec40d91ed24f9c2f00dac30/getRest.mp3'; 
 
-    // HTMLAudio elements for playback (avoid CORS issues with WebAudio fetch/decode)
     let studyStartAudioEl = null;
     let restStartAudioEl = null;
     let htmlAudioUnlocked = false;
-    // WebAudio routing
-    let htmlGainNode = null; // gain node used to boost HTMLAudio and synth output
+    let htmlGainNode = null; 
     let studyStartSource = null;
     let restStartSource = null;
 
-    // (Removed legacy sample preload)
-
-    // Prepare HTMLAudio elements and attempt to unlock them on first user gesture
     function ensureHtmlAudioElements() {
-        if (!studyStartAudioEl) {
-            studyStartAudioEl = new Audio(WORK_START_URL);
-            studyStartAudioEl.preload = 'auto';
-            studyStartAudioEl.crossOrigin = 'anonymous';
-            studyStartAudioEl.volume = DEFAULT_VOLUME;
-        }
-        if (!restStartAudioEl) {
-            restStartAudioEl = new Audio(REST_START_URL);
-            restStartAudioEl.preload = 'auto';
-            restStartAudioEl.crossOrigin = 'anonymous';
-            restStartAudioEl.volume = DEFAULT_VOLUME;
-        }
-        // If an AudioContext exists, create a gain node to boost output and route HTMLAudio through it.
-        if (audioContext) {
-            if (!htmlGainNode) {
-                htmlGainNode = audioContext.createGain();
-                htmlGainNode.gain.value = AUDIO_BOOST; // can be >1 to amplify
-                htmlGainNode.connect(audioContext.destination);
+        try {
+            if (!studyStartAudioEl) {
+                studyStartAudioEl = new Audio(WORK_START_URL);
+                studyStartAudioEl.preload = 'auto';
+                studyStartAudioEl.crossOrigin = 'anonymous';
+                studyStartAudioEl.volume = DEFAULT_VOLUME;
             }
-            try {
-                if (studyStartAudioEl && !studyStartSource) {
-                    studyStartSource = audioContext.createMediaElementSource(studyStartAudioEl);
-                    studyStartSource.connect(htmlGainNode);
-                }
-                if (restStartAudioEl && !restStartSource) {
-                    restStartSource = audioContext.createMediaElementSource(restStartAudioEl);
-                    restStartSource.connect(htmlGainNode);
-                }
-            } catch (e) {
-                // createMediaElementSource may throw if elements were already used or due to CORS; ignore and fall back to element volume
-                console.warn('Could not route HTMLAudio through AudioContext:', e);
+            if (!restStartAudioEl) {
+                restStartAudioEl = new Audio(REST_START_URL);
+                restStartAudioEl.preload = 'auto';
+                restStartAudioEl.crossOrigin = 'anonymous';
+                restStartAudioEl.volume = DEFAULT_VOLUME;
             }
+        } catch (e) {
+            console.warn("Error creating Audio elements. Offline sounds will be used.", e);
+            studyStartAudioEl = null;
+            restStartAudioEl = null;
+        }
+
+        if (audioContext && htmlGainNode === null) {
+            htmlGainNode = audioContext.createGain();
+            htmlGainNode.gain.value = AUDIO_BOOST; 
+            htmlGainNode.connect(audioContext.destination);
+        }
+
+        try {
+            if (audioContext && studyStartAudioEl && !studyStartSource) {
+                studyStartSource = audioContext.createMediaElementSource(studyStartAudioEl);
+                studyStartSource.connect(htmlGainNode);
+            }
+            if (audioContext && restStartAudioEl && !restStartSource) {
+                restStartSource = audioContext.createMediaElementSource(restStartAudioEl);
+                restStartSource.connect(htmlGainNode);
+            }
+        } catch (e) {
+            console.warn('Could not route HTMLAudio through AudioContext:', e);
+            studyStartSource = null; 
+            restStartSource = null; 
         }
     }
 
     function attemptUnlockHtmlAudio() {
-        if (htmlAudioUnlocked) return;
-        ensureHtmlAudioElements();
+        if (htmlAudioUnlocked || !studyStartAudioEl) return; 
+        
         const tryUnlock = (el) => {
             if (!el) return Promise.resolve();
             const prevVol = el.volume;
-            el.volume = 0; // avoid audible blip
-            // play-pause cycle within user gesture to unlock
+            el.volume = 0; 
             return el.play().then(() => {
                 el.pause();
                 el.currentTime = 0;
                 el.volume = prevVol;
             }).catch(() => {
-                // ignore; some browsers may still allow later plays after user gesture
                 el.volume = prevVol;
             });
         };
@@ -363,33 +393,30 @@
         });
     }
 
-    // (Removed legacy sample playback)
-
-    // (Removed WebAudio buffer playback)
     function playDing() {
-        // More pleasing chime with multiple, harmonically-related sine waves
         if (!audioContext) {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (e) {
+                console.error("AudioContext not supported.", e);
+                return;
+            }
         }
         if (audioContext.state === 'suspended') audioContext.resume();
 
-        const t0 = audioContext.currentTime;
-        const volume = DEFAULT_VOLUME;
-
-        // Master gain with a softer attack
-        const master = audioContext.createGain();
-        master.gain.setValueAtTime(0, t0);
-        // scale by DEFAULT_VOLUME to preserve intended relative loudness
-        master.gain.linearRampToValueAtTime((DEFAULT_VOLUME || 1) * 0.5, t0 + 0.05); // Slower, softer attack
-        // connect to boost node if present so both HTMLAudio and synth share same amplification
-        if (htmlGainNode) {
-            master.connect(htmlGainNode);
-        } else {
-            master.connect(audioContext.destination);
+        if (htmlGainNode === null) {
+             htmlGainNode = audioContext.createGain();
+             htmlGainNode.gain.value = AUDIO_BOOST; 
+             htmlGainNode.connect(audioContext.destination);
         }
 
-        // Define the frequencies for a more consonant, bell-like chord (e.g., G Major)
-        const fundamental = 440; // A4
+        const t0 = audioContext.currentTime;
+        const master = audioContext.createGain();
+        master.gain.setValueAtTime(0, t0);
+        master.gain.linearRampToValueAtTime((DEFAULT_VOLUME || 1) * 0.5, t0 + 0.05); 
+        master.connect(htmlGainNode); 
+
+        const fundamental = 440; 
         const partials = [
             fundamental * 0.5, // G3
             fundamental,       // G4
@@ -397,18 +424,17 @@
             fundamental * 2,   // G5
             fundamental * 2.5  // B5
         ];
-        const partialGains = [0.6, 1, 0.7, 0.4, 0.3]; // Give fundamental most presence
+        const partialGains = [0.6, 1, 0.7, 0.4, 0.3]; 
 
         partials.forEach((freq, i) => {
             const osc = audioContext.createOscillator();
             osc.type = 'sine';
             osc.frequency.value = freq;
-            // Slight detuning for richness
             osc.detune.value = i > 0 ? (Math.random() - 0.5) * 8 : 0;
 
             const env = audioContext.createGain();
             const attackTime = 0.015;
-            const decayTime = 1.8 + (Math.random() * 0.4); // Vary decay slightly
+            const decayTime = 1.8 + (Math.random() * 0.4); 
 
             env.gain.setValueAtTime(0, t0);
             env.gain.linearRampToValueAtTime(partialGains[i], t0 + attackTime);
@@ -421,26 +447,33 @@
             osc.stop(t0 + decayTime + 0.1);
         });
 
-        // Smooth fade out for the master gain
         master.gain.setTargetAtTime(0.00001, t0 + 1.5, 0.5);
     }
 
-    // (Removed legacy generic notification chooser)
-
-    // Play transition sound using HTMLAudio first; fallback to synth if it fails
     async function playTransitionSound(nextIsStudyPhase) {
+        if (!audioContext) {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (e) { /* fail silently */ }
+        }
+
+        ensureHtmlAudioElements(); 
+        
+        const el = nextIsStudyPhase ? studyStartAudioEl : restStartAudioEl;
+
+        if (!el) {
+            console.warn('HTMLAudio element not available. Falling back to synth ding.');
+            playDing();
+            return;
+        }
+
         try {
-            ensureHtmlAudioElements();
-            const el = nextIsStudyPhase ? studyStartAudioEl : restStartAudioEl;
-            // Reset to start if previously played
             el.currentTime = 0;
             await el.play();
-            return;
-        } catch (e2) {
-            console.warn('HTMLAudio transition sound failed, falling back to synth ding', e2);
+        } catch (e) {
+            console.warn('HTMLAudio playback failed. Falling back to synth ding.', e);
+            playDing();
         }
-        // Last resort
-        playDing();
     }
 
     function updateDisplay() {
@@ -455,69 +488,181 @@
         statusDisplay.textContent = isStudyTime ? 'Study Session' : 'Take a Break';
     }
 
+    let initialStudySeconds = studyMinutesInput.value * 60;
+    let initialBreakSeconds = breakMinutesInput.value * 60;
+
     function startTimer() {
-        if (isPaused) {
-            isPaused = false;
-            if (!timerInterval) {
-                 totalSeconds = (isStudyTime ? studyMinutesInput.value : breakMinutesInput.value) * 60;
-            }
-            
-            timerInterval = setInterval(() => {
-                if (totalSeconds > 0) {
-                    totalSeconds--;
-                    updateDisplay();
-                } else {
+        // If starting fresh or resuming from a completed/cleared state, set remaining seconds
+        if (isPaused && (totalSeconds === null || totalSeconds <= 0 || totalSeconds === initialStudySeconds || totalSeconds === initialBreakSeconds)) {
+            totalSeconds = (isStudyTime ? studyMinutesInput.value : breakMinutesInput.value) * 60;
+        }
+
+        isPaused = false;
+
+        resetBtn.disabled = false;
+        startPauseBtn.textContent = 'Pause';
+        startPauseBtn.classList.remove('primary');
+        startPauseBtn.classList.add('danger');
+
+        // If an interval is already running, no need to start another
+        if (timerInterval) return;
+
+        // Compute the end timestamp based on remaining seconds
+        endTimestamp = Date.now() + (totalSeconds * 1000);
+
+        const tick = () => {
+            const remainingMs = endTimestamp - Date.now();
+            const remainingSec = Math.max(0, Math.round(remainingMs / 1000));
+            totalSeconds = remainingSec;
+            updateDisplay();
+
+            if (remainingSec <= 0) {
+                // Stop current interval
+                if (timerInterval) {
                     clearInterval(timerInterval);
                     timerInterval = null;
-                    const nextIsStudy = !isStudyTime;
-                    // Play user-provided sound for the upcoming phase
-                    playTransitionSound(nextIsStudy);
-                    isStudyTime = nextIsStudy;
-                    updatePhaseUI();
-                    totalSeconds = (isStudyTime ? studyMinutesInput.value : breakMinutesInput.value) * 60;
-                    updateDisplay();
-                    isPaused = true; 
                 }
-            }, 1000);
-        }
+
+                // Determine what phase just ended
+                const endedWasStudy = isStudyTime;
+
+                // Transition to next phase and play appropriate sound
+                const nextIsStudy = !isStudyTime;
+                playTransitionSound(nextIsStudy);
+
+                isStudyTime = nextIsStudy;
+                updatePhaseUI();
+                totalSeconds = (isStudyTime ? studyMinutesInput.value : breakMinutesInput.value) * 60;
+                updateDisplay();
+
+                // Decide if we should auto-start the next phase
+                // Rule: Breaks are manual unless the just-ended Study duration was 0.
+                let shouldAutoStart = false;
+                if (!isStudyTime) {
+                    // We are about to start a Break
+                    const configuredStudyMinutes = Number(studyMinutesInput.value) || 0;
+                    shouldAutoStart = configuredStudyMinutes === 0;
+                } else {
+                    // We are about to start a Study after Break -> manual by default
+                    shouldAutoStart = false;
+                }
+
+                if (shouldAutoStart && totalSeconds > 0) {
+                    isPaused = false;
+                    startPauseBtn.textContent = 'Pause';
+                    startPauseBtn.classList.remove('primary');
+                    startPauseBtn.classList.add('danger');
+                    endTimestamp = Date.now() + (totalSeconds * 1000);
+                    // Start ticking for the next phase
+                    timerInterval = setInterval(tick, TICK_INTERVAL_MS);
+                } else {
+                    // Stay paused, let user start manually
+                    isPaused = true;
+                    startPauseBtn.textContent = 'Start';
+                    startPauseBtn.classList.remove('danger');
+                    startPauseBtn.classList.add('primary');
+                    endTimestamp = null;
+                }
+            }
+        };
+
+        // Schedule periodic UI refreshes, then run an immediate tick.
+        // Creating the interval first ensures that a zero-duration phase can clear it safely.
+        timerInterval = setInterval(tick, TICK_INTERVAL_MS);
+        tick();
     }
 
+    // When the page becomes visible again, force an immediate tick so the UI catches up
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            // If running, tick immediately to refresh display
+            if (!isPaused && endTimestamp !== null) {
+                const remainingMs = endTimestamp - Date.now();
+                const remainingSec = Math.max(0, Math.round(remainingMs / 1000));
+                totalSeconds = remainingSec;
+                updateDisplay();
+            }
+        }
+    });
+
     function pauseTimer() {
-        clearInterval(timerInterval);
-        timerInterval = null;
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+
+        // Recompute remaining seconds from endTimestamp so we preserve precise remaining time
+        if (endTimestamp !== null) {
+            totalSeconds = Math.max(0, Math.round((endTimestamp - Date.now()) / 1000));
+            endTimestamp = null;
+        }
+
         isPaused = true;
+
+        // Set button to 'Resume' (primary state)
+        startPauseBtn.textContent = 'Resume';
+        startPauseBtn.classList.remove('danger');
+        startPauseBtn.classList.add('primary');
+        resetBtn.disabled = false;
     }
 
     function resetTimer() {
-        pauseTimer();
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        isPaused = true;
         isStudyTime = true;
-        totalSeconds = studyMinutesInput.value * 60;
+        initialStudySeconds = studyMinutesInput.value * 60;
+        initialBreakSeconds = breakMinutesInput.value * 60;
+        totalSeconds = initialStudySeconds;
+        endTimestamp = null;
         updatePhaseUI();
         updateDisplay();
+
+        // Reset buttons to initial state
+        resetBtn.disabled = true;
+        startPauseBtn.textContent = 'Start';
+        startPauseBtn.classList.remove('danger');
+        startPauseBtn.classList.add('primary');
     }
 
-    startBtn.addEventListener('click', () => {
-        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        // resume audio context on user gesture and start preloading sample
-        if (audioContext.state === 'suspended') audioContext.resume();
-        // Prepare and unlock HTMLAudio
+    startPauseBtn.addEventListener('click', () => {
+        if (!audioContext) {
+             try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (e) {
+                console.error("AudioContext not supported.", e);
+            }
+        }
+        if (audioContext && audioContext.state === 'suspended') audioContext.resume();
         ensureHtmlAudioElements();
         attemptUnlockHtmlAudio();
-        startTimer();
+
+        if (isPaused) {
+            startTimer(); 
+        } else {
+            pauseTimer();
+        }
     });
-    pauseBtn.addEventListener('click', pauseTimer);
+
     resetBtn.addEventListener('click', resetTimer);
 
     studyMinutesInput.addEventListener('change', () => {
         if (isPaused && isStudyTime) {
             resetTimer();
+        } else {
+            initialStudySeconds = studyMinutesInput.value * 60;
         }
     });
 
     breakMinutesInput.addEventListener('change', () => {
         if (isPaused && !isStudyTime) {
             totalSeconds = breakMinutesInput.value * 60;
+            initialBreakSeconds = totalSeconds;
             updateDisplay();
+        } else {
+            initialBreakSeconds = breakMinutesInput.value * 60;
         }
     });
 
